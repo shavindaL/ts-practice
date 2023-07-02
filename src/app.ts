@@ -1,3 +1,15 @@
+//Drag and drop interface
+interface Draggable {
+    dragStartHandler(event: DragEvent): void;
+    dragEndHandler(event: DragEvent): void;
+}
+
+interface DragTarget {
+    dragOverHandler(event: DragEvent): void;
+    dropHandler(event: DragEvent): void;
+    dragLeaveHandler(event: DragEvent): void;
+}
+
 //ProjectType
 enum ProjectStatus { Active, Finished }
 
@@ -54,6 +66,21 @@ class ProjectState extends State<Project>{
         this.projects.push(newProject);
         for (const listenerFn of this.listeners) {
             listenerFn(this.projects.slice())
+        }
+    }
+
+    moveProject(projectId: string, newStatus: ProjectStatus) {
+        const project = this.projects.find(project => project.id === projectId);
+        if (project && project.status !== newStatus) {
+            project.status = newStatus;
+            this.updateListeners();
+        }
+
+    }
+
+    private updateListeners() {
+        for (const listenerFn of this.listeners) {
+            listenerFn(this.projects.slice());
         }
     }
 }
@@ -215,15 +242,15 @@ class Input extends Component<HTMLDivElement, HTMLFormElement> {
         this.element.addEventListener('submit', this.handleSubmit)
     }
 
-    renderContent(): void { }
+    renderContent(): void { /* Just a placeholder */ }
 
 }
 
 //ProjectItem Class
-class ProjectItem extends Component<HTMLUListElement, HTMLLIElement>{
+class ProjectItem extends Component<HTMLUListElement, HTMLLIElement> implements Draggable {
     private project: Project;
 
-    get persons(){
+    get persons() {
         return this.project.people === 1 ? '1 person' : `${this.project.people} persons`
     }
 
@@ -234,7 +261,19 @@ class ProjectItem extends Component<HTMLUListElement, HTMLLIElement>{
         this.renderContent();
     }
 
-    configure(): void { }
+    @Autobind
+    dragStartHandler(event: DragEvent): void {
+        event.dataTransfer!.setData('text/plain', this.project.id);
+        event.dataTransfer!.effectAllowed = 'move';
+    }
+
+    dragEndHandler(_: DragEvent): void {
+    }
+
+    configure(): void {
+        this.element.addEventListener('dragstart', this.dragStartHandler)
+        this.element.addEventListener('dragend', this.dragEndHandler)
+    }
 
     renderContent(): void {
         this.element.querySelector('h2')!.textContent = this.project.title;
@@ -244,7 +283,7 @@ class ProjectItem extends Component<HTMLUListElement, HTMLLIElement>{
 }
 
 //Project List Class
-class ProjectList extends Component<HTMLDivElement, HTMLElement>{
+class ProjectList extends Component<HTMLDivElement, HTMLElement> implements DragTarget {
     assignedProject: Project[];
 
 
@@ -257,11 +296,38 @@ class ProjectList extends Component<HTMLDivElement, HTMLElement>{
         this.renderContent();
     }
 
+    @Autobind
+    dragOverHandler(event: DragEvent): void {
+
+        if (event.dataTransfer && event.dataTransfer.types[0] === 'text/plain') {
+            event.preventDefault();
+            const listELement = this.element.querySelector('ul')!;
+            listELement.classList.add('droppable');
+        }
+
+    }
+
+    @Autobind
+    dropHandler(event: DragEvent): void {
+        const projectId = event.dataTransfer!.getData('text/plain');
+        projectState.moveProject(projectId, this.type === 'active' ? ProjectStatus.Active : ProjectStatus.Finished);
+    }
+
+    @Autobind
+    dragLeaveHandler(_: DragEvent): void {
+        const listELement = this.element.querySelector('ul')!;
+        listELement.classList.remove('droppable')
+    }
+
     private renderProjects() {
+        this.element.addEventListener('dragover', this.dragOverHandler);
+        this.element.addEventListener('drop', this.dropHandler);
+        this.element.addEventListener('dragleave', this.dragLeaveHandler);
+
         const listEl = document.getElementById(`${this.type}`)! as HTMLUListElement;
         listEl.innerHTML = ''
         for (const projectItem of this.assignedProject) {
-            new ProjectItem(this.element.querySelector('ul')!.id, projectItem)
+            new ProjectItem(this.element.querySelector('ul')!.id, projectItem);
         }
     }
 
