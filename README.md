@@ -7,5 +7,4 @@
 2. To run the project you can run following commands.
 
     * npm i
-    * npx tsc
     * npm start
